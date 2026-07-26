@@ -1,0 +1,75 @@
+# ===========================================================================
+#  EKS cluster for NiFi, via eksctl.
+#
+#    eksctl create cluster -f cluster.yaml     (~15-20 minutes)
+#    eksctl delete cluster -f cluster.yaml --disable-nodegroup-eviction
+#
+#  WHY EKS AT ALL, when the EC2 version works?
+#    + StatefulSets give you exactly what NiFi needs: a stable pod name, a
+#      stable DNS name, and a PersistentVolumeClaim that follows the pod.
+#      That last one is the thing that was awkward on plain EC2.
+#    + Rolling upgrades one pod at a time, with ordering guaranteed.
+#    - You now operate Kubernetes as well as NiFi. That is a real cost.
+#    - The control plane is ~$73/month before a single node runs.
+#
+#  Chapter 12 of the guide compares them honestly.
+# ===========================================================================
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: nifi-cluster
+  region: eu-west-1
+  version: "1.31"
+  tags:
+    Project: nifi-demo
+    ManagedBy: eksctl
+
+# Private nodes, public endpoint for kubectl. Nodes reach out through NAT.
+vpc:
+  cidr: "10.30.0.0/16"
+  nat:
+    gateway: HighlyAvailable   # one NAT per AZ; 'Single' is cheaper but fragile
+  clusterEndpoints:
+    publicAccess: true
+    privateAccess: true
+
+# REQUIRED for IRSA - giving pods IAM permissions without node-wide credentials.
+iam:
+  withOIDC: true
+
+managedNodeGroups:
+  - name: nifi-nodes
+    instanceType: m6i.large
+    minSize: 3
+    maxSize: 5
+    desiredCapacity: 3
+    volumeSize: 50
+    volumeType: gp3
+    volumeEncrypted: true
+    privateNetworking: true
+    # Spread across AZs so one AZ failure leaves a quorum.
+    availabilityZones: ["eu-west-1a", "eu-west-1b", "eu-west-1c"]
+    labels:
+      workload: nifi
+    iam:
+      withAddonPolicies:
+        cloudWatch: true
+        ebs: true          # so the CSI driver can create and attach volumes
+        albIngress: true
+
+addons:
+  # WITHOUT THIS ADDON, PersistentVolumeClaims STAY 'Pending' FOREVER and the
+  # NiFi pods never start. It is the single most common EKS-statefulset
+  # surprise, because nothing in the error message mentions a missing driver.
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator"]
+    logRetentionInDays: 30

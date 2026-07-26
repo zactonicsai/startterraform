@@ -1,0 +1,95 @@
+# ===========================================================================
+#  Single-node NiFi on your Mac. Start here before you touch AWS.
+#
+#    ./run.sh              start it
+#    ./logs.sh             watch the log
+#    ./stop.sh             stop, KEEP your flows
+#    ./stop.sh --wipe      stop and delete everything
+#
+#  UI:  https://localhost:8443/nifi
+#       Your browser WILL warn about the certificate. That is expected:
+#       NiFi generates its own self-signed certificate on first start.
+#       Click through it. Never do that against a real server.
+# ===========================================================================
+
+services:
+
+  nifi:
+    # 2.10.0 is the current release (June 2026). Only the latest NiFi release
+    # gets security fixes, so pin a real version and bump it deliberately.
+    #
+    # Do NOT use anything at or below 2.7.2: CVE-2026-25903 is a high-severity
+    # authorisation bypass affecting 1.1.0 through 2.7.2. The fix landed in 2.8.0.
+    image: apache/nifi:2.10.0
+    container_name: nifi
+    hostname: nifi
+
+    ports:
+      - "8443:8443"     # the web UI and REST API, HTTPS only
+
+    environment:
+      # ---- Login ----
+      # Single User authentication: one username, one password, no directory.
+      # Fine for a laptop. In AWS you replace this with OIDC, LDAP or mTLS.
+      # The password MUST be at least 12 characters or NiFi refuses to start.
+      SINGLE_USER_CREDENTIALS_USERNAME: admin
+      SINGLE_USER_CREDENTIALS_PASSWORD: ChangeThisLocally123
+
+      # ---- Web ----
+      NIFI_WEB_HTTPS_PORT: "8443"
+      # Which hostnames NiFi will accept in the Host header. Without the right
+      # value here NiFi answers "Invalid host header" and the UI never loads.
+      # This is the single most common NiFi-behind-a-proxy problem. On AWS this
+      # has to include your load balancer name (see the guide, Chapter 6).
+      NIFI_WEB_PROXY_HOST: "localhost:8443"
+
+      # ---- Encryption key for sensitive flow values ----
+      # NiFi encrypts passwords stored inside your flow with this key.
+      # WRITE IT DOWN. If you lose it, every sensitive property in every flow
+      # becomes undecryptable and you will be retyping credentials by hand.
+      # It must be identical on every node of a cluster and must survive upgrades.
+      NIFI_SENSITIVE_PROPS_KEY: "local-dev-sensitive-key-change-me"
+
+      # ---- Memory ----
+      # The image defaults to a 512 MB heap, which is too small for anything
+      # interesting and produces confusing OutOfMemory errors mid-flow.
+      NIFI_JVM_HEAP_INIT: "1g"
+      NIFI_JVM_HEAP_MAX: "2g"
+
+    volumes:
+      # ---- Why so many volumes? ----
+      # This is the most important thing to understand about running NiFi.
+      # NiFi is NOT stateless. Five separate directories hold live state, and
+      # losing any of them loses something different:
+      #
+      #   conf/                 your flow definition, and NiFi's own config
+      #   flowfile_repository/  the metadata for every in-flight file
+      #   content_repository/   the actual BYTES of in-flight data
+      #   provenance_repository/ the audit trail of what happened to what
+      #   database_repository/  component state (e.g. "last file I listed")
+      #   state/                local component state
+      #   logs/                 the log files you will need when debugging
+      #
+      # Skip these volumes and every restart throws away your flows AND any
+      # data that was mid-journey. Chapter 7 of the guide explains why this
+      # makes NiFi fault tolerance genuinely different from a stateless app.
+      - ./data/conf:/opt/nifi/nifi-current/conf
+      - ./data/flowfile_repository:/opt/nifi/nifi-current/flowfile_repository
+      - ./data/content_repository:/opt/nifi/nifi-current/content_repository
+      - ./data/provenance_repository:/opt/nifi/nifi-current/provenance_repository
+      - ./data/database_repository:/opt/nifi/nifi-current/database_repository
+      - ./data/state:/opt/nifi/nifi-current/state
+      - ./data/logs:/opt/nifi/nifi-current/logs
+      # A scratch folder you can reach from inside a flow, for GetFile/PutFile
+      - ./sandbox:/sandbox
+
+    # NiFi takes 60-120 seconds to become usable. Without a start_period the
+    # healthcheck fails during normal startup and you think it is broken.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfs https://localhost:8443/nifi-api/access/config > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+    restart: unless-stopped

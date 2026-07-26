@@ -1,0 +1,200 @@
+#!/bin/bash
+# ===========================================================================
+#  Runs once, as root, when a NiFi node boots. Everything is logged to
+#  /var/log/nifi-bootstrap.log - read that first when a node misbehaves.
+# ===========================================================================
+set -x
+exec > >(tee -a /var/log/nifi-bootstrap.log) 2>&1
+echo "=== NiFi bootstrap starting $(date -u) ==="
+
+REGION="@@REGION@@"
+PROJECT="@@PROJECT@@"
+NIFI_IMAGE="@@NIFI_IMAGE@@"
+REGISTRY="@@REGISTRY@@"
+IS_CLUSTER="@@IS_CLUSTER@@"
+ZK_HOST="@@ZK_HOST@@"
+PROXY_HOSTS="@@PROXY_HOSTS@@"
+HEAP="@@HEAP@@"
+ELECTION_WAIT="@@ELECTION_WAIT@@"
+
+# ---------- 1. Packages ----------
+dnf install -y docker jq amazon-cloudwatch-agent xfsprogs
+systemctl enable --now docker
+
+# ---------- 2. Find and mount the DATA volume ----------
+# Everything NiFi cares about lives on a SEPARATE EBS volume, so this
+# instance can be destroyed and rebuilt without losing in-flight data.
+# The volume is only formatted if it has no filesystem yet - which is what
+# makes re-attaching an existing volume to a new instance safe.
+DATA_DEV=""
+for d in $(lsblk -dpno NAME); do
+  # A disk with no mountpoints anywhere in its tree is our unused data volume.
+  if [ -z "$(lsblk -no MOUNTPOINT "$d" | tr -d ' \n')" ]; then DATA_DEV="$d"; break; fi
+done
+
+if [ -z "$DATA_DEV" ]; then
+  echo "FATAL: no unmounted data volume found. lsblk says:"; lsblk
+  exit 1
+fi
+echo "data volume: $DATA_DEV"
+
+if blkid "$DATA_DEV" >/dev/null 2>&1; then
+  echo "volume already has a filesystem - REUSING IT (data preserved)"
+else
+  echo "volume is blank - creating xfs"
+  mkfs -t xfs "$DATA_DEV"
+fi
+
+UUID=$(blkid -s UUID -o value "$DATA_DEV")
+mkdir -p /data
+# nofail: a missing volume must not stop the instance booting, or you cannot
+# even log in to diagnose it.
+grep -q "$UUID" /etc/fstab || echo "UUID=$UUID /data xfs defaults,nofail 0 2" >> /etc/fstab
+mount -a
+mountpoint -q /data || { echo "FATAL: /data not mounted"; exit 1; }
+
+# ---------- 3. Repository layout ----------
+# Separate directories, all on the data volume. In a heavy production flow you
+# would give content_repository and provenance_repository their OWN volumes so
+# they do not compete for IOPS - that is the single biggest NiFi tuning win.
+for d in conf flowfile_repository content_repository provenance_repository \
+         database_repository state logs; do
+  mkdir -p "/data/nifi/$d"
+done
+# The container runs as uid 1000 (the 'nifi' user). Wrong ownership shows up
+# as NiFi failing to start with permission errors on the repositories.
+chown -R 1000:1000 /data/nifi
+
+# ---------- 4. Secrets, fetched with the instance role ----------
+# No credential is stored on this box. The role is what grants access.
+get_secret() {
+  aws secretsmanager get-secret-value --region "$REGION" \
+    --secret-id "$1" --query SecretString --output text
+}
+ART=$(get_secret "$PROJECT/artifactory")
+ART_USER=$(echo "$ART" | jq -r .username)
+ART_PASS=$(echo "$ART" | jq -r .password)
+SENSITIVE_KEY=$(get_secret "$PROJECT/sensitive-props-key")
+ADMIN=$(get_secret "$PROJECT/nifi-admin")
+ADMIN_USER=$(echo "$ADMIN" | jq -r .username)
+ADMIN_PASS=$(echo "$ADMIN" | jq -r .password)
+
+# ---------- 5. Pull the image from Artifactory ----------
+# Retried, because a transient DNS or NAT hiccup at boot is common and a
+# single failed pull would otherwise leave a permanently broken node.
+for attempt in 1 2 3 4 5; do
+  echo "$ART_PASS" | docker login "$REGISTRY" --username "$ART_USER" --password-stdin && break
+  echo "docker login attempt $attempt failed; retrying in 15s"; sleep 15
+done
+for attempt in 1 2 3 4 5; do
+  docker pull "$NIFI_IMAGE" && break
+  echo "docker pull attempt $attempt failed; retrying in 20s"; sleep 20
+done
+# Remove the stored registry credential immediately. docker login writes it to
+# disk in plain base64, where a snapshot or a later intruder would find it.
+docker logout "$REGISTRY" || true
+rm -f /root/.docker/config.json
+unset ART_PASS
+
+docker image inspect "$NIFI_IMAGE" >/dev/null 2>&1 || {
+  echo "FATAL: image not present after retries. Check NAT, DNS and credentials."
+  exit 1
+}
+
+# ---------- 6. Identity for clustering ----------
+# A node must advertise a name the OTHER nodes can resolve. The private DNS
+# name works because the VPC has DNS hostnames enabled (see 01-network.sh).
+PRIVATE_DNS=$(curl -s --max-time 5 -H "X-aws-ec2-metadata-token: $(curl -sX PUT \
+  'http://169.254.169.254/latest/api/token' \
+  -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')" \
+  http://169.254.169.254/latest/meta-data/local-hostname)
+echo "advertising as: $PRIVATE_DNS"
+
+# ---------- 7. Run NiFi ----------
+docker rm -f nifi 2>/dev/null || true
+
+CLUSTER_ARGS=()
+if [ "$IS_CLUSTER" = "true" ]; then
+  CLUSTER_ARGS=(
+    -e NIFI_CLUSTER_IS_NODE=true
+    -e NIFI_CLUSTER_NODE_PROTOCOL_PORT=11443
+    -e NIFI_CLUSTER_ADDRESS="$PRIVATE_DNS"
+    -e NIFI_ZK_CONNECT_STRING="$ZK_HOST:2181"
+    -e NIFI_ELECTION_MAX_WAIT="$ELECTION_WAIT"
+    -e NIFI_ELECTION_MAX_CANDIDATES=2
+    -p 11443:11443
+    -p 6342:6342
+  )
+fi
+
+docker run -d --name nifi --restart unless-stopped \
+  -p 8443:8443 \
+  "${CLUSTER_ARGS[@]}" \
+  -e NIFI_WEB_HTTPS_PORT=8443 \
+  -e NIFI_WEB_PROXY_HOST="$PROXY_HOSTS,$PRIVATE_DNS:8443" \
+  -e SINGLE_USER_CREDENTIALS_USERNAME="$ADMIN_USER" \
+  -e SINGLE_USER_CREDENTIALS_PASSWORD="$ADMIN_PASS" \
+  -e NIFI_SENSITIVE_PROPS_KEY="$SENSITIVE_KEY" \
+  -e NIFI_JVM_HEAP_INIT="$HEAP" \
+  -e NIFI_JVM_HEAP_MAX="$HEAP" \
+  -v /data/nifi/conf:/opt/nifi/nifi-current/conf \
+  -v /data/nifi/flowfile_repository:/opt/nifi/nifi-current/flowfile_repository \
+  -v /data/nifi/content_repository:/opt/nifi/nifi-current/content_repository \
+  -v /data/nifi/provenance_repository:/opt/nifi/nifi-current/provenance_repository \
+  -v /data/nifi/database_repository:/opt/nifi/nifi-current/database_repository \
+  -v /data/nifi/state:/opt/nifi/nifi-current/state \
+  -v /data/nifi/logs:/opt/nifi/nifi-current/logs \
+  "$NIFI_IMAGE"
+
+unset SENSITIVE_KEY ADMIN_PASS
+
+# ---------- 8. Ship logs to CloudWatch ----------
+# Without this, a terminated instance takes the only copy of the log with it -
+# exactly when you most need to know why it died.
+cat > /opt/aws/amazon-cloudwatch-agent/etc/nifi-logs.json << 'CWEOF'
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {"file_path": "/data/nifi/logs/nifi-app.log",
+           "log_group_name": "@@LOG_GROUP@@", "log_stream_name": "{instance_id}/nifi-app",
+           "timestamp_format": "%Y-%m-%d %H:%M:%S"},
+          {"file_path": "/data/nifi/logs/nifi-user.log",
+           "log_group_name": "@@LOG_GROUP@@", "log_stream_name": "{instance_id}/nifi-user"},
+          {"file_path": "/data/nifi/logs/nifi-bootstrap.log",
+           "log_group_name": "@@LOG_GROUP@@", "log_stream_name": "{instance_id}/nifi-boot"},
+          {"file_path": "/var/log/nifi-bootstrap.log",
+           "log_group_name": "@@LOG_GROUP@@", "log_stream_name": "{instance_id}/ec2-boot"}
+        ]
+      }
+    }
+  },
+  "metrics": {
+    "namespace": "@@PROJECT@@/NiFi",
+    "append_dimensions": {"InstanceId": "${aws:InstanceId}"},
+    "metrics_collected": {
+      "disk":  {"measurement": ["used_percent"], "resources": ["/data"], "metrics_collection_interval": 60},
+      "mem":   {"measurement": ["mem_used_percent"], "metrics_collection_interval": 60}
+    }
+  }
+}
+CWEOF
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/nifi-logs.json || \
+  echo "WARN: CloudWatch agent failed to start - logs stay local only"
+
+# ---------- 9. Wait until genuinely ready ----------
+# NiFi answers on the port well before it can serve the UI. This waits for a
+# real API response, which is what the load balancer health check also does.
+echo "waiting for NiFi to answer..."
+for i in $(seq 1 60); do
+  if curl -kfs https://localhost:8443/nifi-api/access/config >/dev/null 2>&1; then
+    echo "=== NiFi READY after ~$((i*5))s ==="
+    exit 0
+  fi
+  sleep 5
+done
+echo "WARN: NiFi did not answer within 5 minutes"
+docker logs nifi --tail 80
+exit 1

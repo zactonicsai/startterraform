@@ -1,0 +1,110 @@
+# ===========================================================================
+#  ZooKeeper: three replicas so a single pod loss keeps a quorum (2 of 3).
+#
+#  ALTERNATIVE WORTH KNOWING: NiFi 2.x can elect its leader using Kubernetes
+#  leases instead, removing ZooKeeper entirely -
+#    nifi.cluster.leader.election.implementation=KubernetesLeaderElectionManager
+#  It needs RBAC on leases and a matching state provider. Check the docs for
+#  YOUR exact NiFi version before relying on it; ZooKeeper is the path that
+#  works identically on EC2 and EKS, which is why it is the default here.
+# ===========================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-headless
+  namespace: nifi
+spec:
+  clusterIP: None          # headless: gives each pod a stable DNS name
+  selector:
+    app: zookeeper
+  ports:
+    - { name: client, port: 2181 }
+    - { name: peer,   port: 2888 }
+    - { name: leader, port: 3888 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  namespace: nifi
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - { name: client, port: 2181, targetPort: 2181 }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: zookeeper-pdb
+  namespace: nifi
+spec:
+  # Stops a node drain taking two ZooKeeper pods at once and losing quorum.
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: zookeeper
+  namespace: nifi
+spec:
+  serviceName: zookeeper-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      affinity:
+        podAntiAffinity:
+          # Prefer separate nodes, so one node failing does not take two pods.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels: { app: zookeeper }
+      containers:
+        - name: zookeeper
+          image: zookeeper:3.9
+          ports:
+            - { containerPort: 2181, name: client }
+            - { containerPort: 2888, name: peer }
+            - { containerPort: 3888, name: leader }
+          env:
+            # ZooKeeper needs a numeric id per node. Derive it from the
+            # StatefulSet ordinal, which is stable across restarts.
+            - name: POD_NAME
+              valueFrom: { fieldRef: { fieldPath: metadata.name } }
+            - name: ZOO_SERVERS
+              value: "server.1=zookeeper-0.zookeeper-headless:2888:3888;2181 server.2=zookeeper-1.zookeeper-headless:2888:3888;2181 server.3=zookeeper-2.zookeeper-headless:2888:3888;2181"
+            - name: ZOO_4LW_COMMANDS_WHITELIST
+              value: "srvr,mntr,ruok"
+          command: ["/bin/bash","-c"]
+          args:
+            - |
+              export ZOO_MY_ID=$(( ${POD_NAME##*-} + 1 ))
+              echo "starting as ZOO_MY_ID=$ZOO_MY_ID"
+              exec /docker-entrypoint.sh zkServer.sh start-foreground
+          readinessProbe:
+            exec: { command: ["/bin/bash","-c","echo ruok | nc 127.0.0.1 2181 | grep imok"] }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "512Mi" }
+            limits:   { memory: "1Gi" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: nifi-gp3
+        resources: { requests: { storage: 10Gi } }

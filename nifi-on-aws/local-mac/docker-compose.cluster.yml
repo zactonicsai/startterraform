@@ -1,0 +1,130 @@
+# ===========================================================================
+#  THREE-node NiFi cluster on your Mac, with ZooKeeper.
+#
+#    docker compose -f docker-compose.cluster.yml up -d
+#    docker compose -f docker-compose.cluster.yml down -v
+#
+#  UI:  https://localhost:8443/nifi   (node 1 - but any node shows the cluster)
+#
+#  WARNING: this wants about 8 GB of RAM. Docker Desktop -> Settings ->
+#  Resources -> Memory. If Docker has less, nodes die with no clear message.
+#
+#  Run this ONLY after the single node works. It exists so you can see what
+#  clustering actually does before paying AWS for the privilege.
+# ===========================================================================
+
+x-nifi-common: &nifi-common
+  image: apache/nifi:2.10.0
+  environment: &nifi-env
+    SINGLE_USER_CREDENTIALS_USERNAME: admin
+    SINGLE_USER_CREDENTIALS_PASSWORD: ChangeThisLocally123
+    NIFI_WEB_HTTPS_PORT: "8443"
+
+    # ---- Clustering ----
+    NIFI_CLUSTER_IS_NODE: "true"
+    NIFI_CLUSTER_NODE_PROTOCOL_PORT: "11443"
+    # Every node talks to the same ZooKeeper to elect a coordinator and a
+    # primary node. On EC2 you run ZooKeeper too; on Kubernetes NiFi 2.x can
+    # elect a leader using Kubernetes leases instead. See guide Chapter 11.
+    NIFI_ZK_CONNECT_STRING: "zookeeper:2181"
+    # How long the cluster waits for nodes to appear before electing a flow.
+    # Too short and a slow node gets outvoted and has its flow overwritten.
+    NIFI_ELECTION_MAX_WAIT: "1 min"
+    NIFI_ELECTION_MAX_CANDIDATES: "3"
+
+    # MUST be byte-identical on every node. Different keys on different nodes
+    # means nodes cannot read each other's sensitive values and refuse to join.
+    NIFI_SENSITIVE_PROPS_KEY: "local-dev-sensitive-key-change-me"
+
+    NIFI_JVM_HEAP_INIT: "1g"
+    NIFI_JVM_HEAP_MAX: "2g"
+
+services:
+
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    container_name: nifi-zookeeper
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    ports:
+      - "2181:2181"
+
+  nifi-1:
+    <<: *nifi-common
+    container_name: nifi-1
+    hostname: nifi-1
+    depends_on: [zookeeper]
+    ports:
+      - "8443:8443"
+    environment:
+      <<: *nifi-env
+      # Each node must advertise a hostname the OTHER nodes can resolve.
+      # Inside compose that is the service name. On EC2 it is the private DNS
+      # name, and getting it wrong is why nodes sit at "Connecting" forever.
+      NIFI_CLUSTER_ADDRESS: nifi-1
+      NIFI_WEB_PROXY_HOST: "localhost:8443,nifi-1:8443"
+    volumes:
+      - nifi1-conf:/opt/nifi/nifi-current/conf
+      - nifi1-flowfile:/opt/nifi/nifi-current/flowfile_repository
+      - nifi1-content:/opt/nifi/nifi-current/content_repository
+      - nifi1-prov:/opt/nifi/nifi-current/provenance_repository
+      - nifi1-db:/opt/nifi/nifi-current/database_repository
+      - nifi1-state:/opt/nifi/nifi-current/state
+
+  nifi-2:
+    <<: *nifi-common
+    container_name: nifi-2
+    hostname: nifi-2
+    depends_on: [zookeeper]
+    ports:
+      - "8444:8443"
+    environment:
+      <<: *nifi-env
+      NIFI_CLUSTER_ADDRESS: nifi-2
+      NIFI_WEB_PROXY_HOST: "localhost:8444,nifi-2:8443"
+    volumes:
+      - nifi2-conf:/opt/nifi/nifi-current/conf
+      - nifi2-flowfile:/opt/nifi/nifi-current/flowfile_repository
+      - nifi2-content:/opt/nifi/nifi-current/content_repository
+      - nifi2-prov:/opt/nifi/nifi-current/provenance_repository
+      - nifi2-db:/opt/nifi/nifi-current/database_repository
+      - nifi2-state:/opt/nifi/nifi-current/state
+
+  nifi-3:
+    <<: *nifi-common
+    container_name: nifi-3
+    hostname: nifi-3
+    depends_on: [zookeeper]
+    ports:
+      - "8445:8443"
+    environment:
+      <<: *nifi-env
+      NIFI_CLUSTER_ADDRESS: nifi-3
+      NIFI_WEB_PROXY_HOST: "localhost:8445,nifi-3:8443"
+    volumes:
+      - nifi3-conf:/opt/nifi/nifi-current/conf
+      - nifi3-flowfile:/opt/nifi/nifi-current/flowfile_repository
+      - nifi3-content:/opt/nifi/nifi-current/content_repository
+      - nifi3-prov:/opt/nifi/nifi-current/provenance_repository
+      - nifi3-db:/opt/nifi/nifi-current/database_repository
+      - nifi3-state:/opt/nifi/nifi-current/state
+
+volumes:
+  nifi1-conf: {}
+  nifi1-flowfile: {}
+  nifi1-content: {}
+  nifi1-prov: {}
+  nifi1-db: {}
+  nifi1-state: {}
+  nifi2-conf: {}
+  nifi2-flowfile: {}
+  nifi2-content: {}
+  nifi2-prov: {}
+  nifi2-db: {}
+  nifi2-state: {}
+  nifi3-conf: {}
+  nifi3-flowfile: {}
+  nifi3-content: {}
+  nifi3-prov: {}
+  nifi3-db: {}
+  nifi3-state: {}

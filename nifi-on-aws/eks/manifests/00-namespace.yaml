@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nifi
+  labels:
+    name: nifi
+---
+# gp3 is cheaper and faster than the gp2 default, and lets you set IOPS.
+# NiFi is IO-bound on its repositories, so this genuinely matters.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nifi-gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  iops: "3000"
+  throughput: "250"
+  encrypted: "true"
+# Retain: deleting the StatefulSet must NOT delete the disks holding
+# in-flight data. Change to Delete only for a throwaway lab.
+reclaimPolicy: Retain
+# Wait until the pod is scheduled before creating the volume, so the volume
+# lands in the same AZ as the pod. Immediate binding causes pods that can
+# never schedule because their disk is in the wrong zone.
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true

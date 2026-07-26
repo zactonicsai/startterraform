@@ -1,0 +1,55 @@
+# ===========================================================================
+#  Ingress -> a real ALB, built by the AWS Load Balancer Controller.
+#
+#  If ADDRESS stays blank after applying this, the controller is not installed.
+#  Run ../install-controllers.sh.
+# ===========================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nifi
+  namespace: nifi
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:eu-west-1:111122223333:certificate/REPLACE-ME"
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+
+    # NiFi speaks HTTPS ONLY. Without this the ALB talks plain HTTP to the pod
+    # and every health check fails with a protocol error.
+    alb.ingress.kubernetes.io/backend-protocol: HTTPS
+
+    # 200-401, for the same reason as the EC2 build: an auth challenge still
+    # proves the web server is alive.
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTPS
+    alb.ingress.kubernetes.io/healthcheck-path: /nifi-api/access/config
+    alb.ingress.kubernetes.io/success-codes: '200-401'
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/healthy-threshold-count: '2'
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: '3'
+
+    # MANDATORY. The NiFi UI is a single-page app; without stickiness its API
+    # calls scatter across pods and you get random logouts.
+    alb.ingress.kubernetes.io/target-group-attributes: >-
+      stickiness.enabled=true,
+      stickiness.type=lb_cookie,
+      stickiness.lb_cookie.duration_seconds=86400,
+      deregistration_delay.timeout_seconds=120
+
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=300
+    # Lock this down. Replace with your own address.
+    alb.ingress.kubernetes.io/inbound-cidrs: "203.0.113.10/32"
+    alb.ingress.kubernetes.io/tags: Project=nifi-demo,ManagedBy=k8s-ingress
+spec:
+  ingressClassName: alb
+  rules:
+    - host: nifi.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nifi
+                port: { number: 8443 }

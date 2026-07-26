@@ -1,0 +1,26 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored.
+project      = "nifi-demo"
+aws_region   = "eu-west-1"
+
+# 1 = simple single node. 3 = cluster with ALB + ZooKeeper.
+node_count   = 1
+
+allowed_cidr = "203.0.113.10/32"   # curl -s https://checkip.amazonaws.com
+
+artifactory_registry = "mycompany.jfrog.io"
+artifactory_repo     = "docker-remote"
+artifactory_user     = "svc-nifi-puller"
+
+# NEVER put the password here. Pass it in the environment:
+#   export TF_VAR_artifactory_password='...'
+
+nifi_version = "2.10.0"
+
+# Required only when node_count > 1. Must be in aws_region.
+acm_certificate_arn = ""
+hosted_zone_id      = ""
+nifi_hostname       = ""
+
+# If you are migrating an existing NiFi, put its EXISTING key here so your
+# encrypted flow values still decrypt. Otherwise one is generated.
+#   export TF_VAR_nifi_sensitive_props_key='...'
