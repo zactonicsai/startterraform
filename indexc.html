@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Red Hat Linux Admin Guide</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            ibmBlue: '#0f62fe',
+            ibmDark: '#161616',
+            ibmLight: '#ffffff',
+            ibmGray: '#f4f4f4',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
+    html {
+      font-size: 14px; /* Base size */
+      transition: font-size 0.2s ease;
+    }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    
+    /* Code block styling */
+    pre {
+      background-color: #2d3748;
+      color: #e2e8f0;
+      padding: 1rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body class="bg-ibmLight text-ibmDark dark:bg-ibmDark dark:text-ibmGray min-h-screen flex flex-col">
+
+  <!-- Navigation Bar -->
+  <nav class="sticky top-0 bg-ibmBlue text-white p-4 flex flex-col md:flex-row justify-between items-center shadow-lg z-40 gap-4">
+    <h1 class="font-bold text-xl md:text-2xl tracking-wide">Linux Admin Guide</h1>
+    <div class="flex gap-2 items-center">
+      <button onclick="changeFontSize()" id="fontSizeBtn" class="bg-white text-ibmBlue hover:bg-gray-200 px-4 py-2 rounded font-semibold text-sm transition shadow">
+        Size: 14px
+      </button>
+      <button onclick="toggleDarkMode()" class="bg-ibmDark text-white border border-white hover:bg-gray-800 px-4 py-2 rounded font-semibold text-sm transition shadow">
+        Dark/Light Mode
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-grow p-6 md:p-12 max-w-5xl mx-auto w-full space-y-12">
+    
+    <!-- Intro Section -->
+    <section>
+      <h2 class="text-3xl font-bold mb-4 text-ibmBlue dark:text-blue-400">Welcome to Red Hat Linux!</h2>
+      <p class="mb-4 text-lg">
+        Imagine your computer server is a giant factory. <strong>Red Hat Enterprise Linux (RHEL)</strong> is the manager keeping the lights on, the doors locked, and the workers doing their jobs. As an Administrator, your job is to give this manager the right instructions to keep everything running smoothly. 
+      </p>
+      <button onclick="openModal('docsModal')" class="bg-ibmBlue text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+        More Info & Official Links
+      </button>
+    </section>
+
+    <!-- Common Tasks Section -->
+    <section class="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 border-ibmBlue">
+      <h2 class="text-2xl font-bold mb-4">1. Common Admin Tasks</h2>
+      
+      <div class="space-y-6">
+        <div>
+          <h3 class="text-xl font-semibold mb-2">A. Managing Users</h3>
+          <p class="mb-2"><strong>What:</strong> Creating accounts so different people can log into the server.</p>
+          <p class="mb-2"><strong>Why:</strong> You never want everyone sharing one master password. That's a huge security risk!</p>
+          <p class="mb-2"><strong>How:</strong> Use the <code>useradd</code> and <code>passwd</code> commands.</p>
+          <pre><code># Create a new user named "sarah"
+sudo useradd sarah
+
+# Give Sarah a password
+sudo passwd sarah</code></pre>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold mb-2">B. Managing Services</h3>
+          <p class="mb-2"><strong>What:</strong> Starting and stopping background programs (like a web server).</p>
+          <p class="mb-2"><strong>Why:</strong> If a website crashes, you often just need to restart the program that runs it.</p>
+          <p class="mb-2"><strong>How:</strong> Use the <code>systemctl</code> command.</p>
+          <pre><code># Restart the web server
+sudo systemctl restart httpd
+
+# Make sure the web server starts automatically when the computer turns on
+sudo systemctl enable httpd</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Troubleshooting Section -->
+    <section>
+      <h2 class="text-2xl font-bold mb-4 text-ibmBlue dark:text-blue-400">2. Key Troubleshooting</h2>
+      <p class="mb-4 text-lg">When things break, don't panic. You just need to play detective.</p>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="border p-4 rounded shadow-sm dark:border-gray-700">
+          <h3 class="text-xl font-bold mb-2">Reading the Diary (Logs)</h3>
+          <p class="mb-2">Linux writes down <em>everything</em> it does in log files. If a program fails, check the diary!</p>
+          <pre><code># Read the main system log
+sudo journalctl -xe</code></pre>
+        </div>
+        <div class="border p-4 rounded shadow-sm dark:border-gray-700">
+          <h3 class="text-xl font-bold mb-2">Finding Resource Hogs</h3>
+          <p class="mb-2">Is the server super slow? Find out which program is eating all the memory.</p>
+          <pre><code># Show a live list of running programs
+top</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pros, Cons, and Gotchas -->
+    <section class="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-md">
+      <h2 class="text-2xl font-bold mb-4">3. Pros, Cons, and Gotchas</h2>
+      <ul class="list-disc pl-6 space-y-3 text-lg mb-4">
+        <li><strong>Pro:</strong> Super stable. You rarely have to reboot a Linux server unless you update the core kernel.</li>
+        <li><strong>Pro:</strong> Free and open-source tools mean you can build almost anything without buying expensive software.</li>
+        <li><strong>Con:</strong> It is mostly text-based (Command Line). There is no mouse to click around with on a server!</li>
+        <li><strong>Gotcha - SELinux:</strong> Red Hat has a very strict security guard built-in called SELinux. If you configure a web server perfectly and it <em>still</em> doesn't work, SELinux probably blocked it.
+          <br><em>Quick check command:</em> <code>getenforce</code>
+        </li>
+      </ul>
+      <button onclick="openModal('selinuxModal')" class="bg-ibmDark dark:bg-gray-700 text-white px-4 py-2 rounded text-sm hover:bg-black transition">
+        What is SELinux? (Popup)
+      </button>
+    </section>
+
+    <!-- Coding Examples Section -->
+    <section>
+      <h2 class="text-2xl font-bold mb-4 text-ibmBlue dark:text-blue-400">4. Automation Scripts</h2>
+      <p class="mb-4 text-lg">Administrators are lazy in a good way—they write code to do their chores for them.</p>
+      
+      <div class="space-y-6">
+        <div>
+          <h3 class="text-xl font-semibold mb-2">Bash Shell Script (Automated Backup)</h3>
+          <p class="mb-2">Shell scripts are just a list of terminal commands saved in a text file. This script zips up your website folder.</p>
+          <pre><code>#!/bin/bash
+# Step 1: Tell the user what we are doing
+echo "Starting website backup..."
+
+# Step 2: Zip the folder (c=create, z=zip, v=verbose/show me, f=filename)
+tar -czvf /backup/website_backup.tar.gz /var/www/html
+
+# Step 3: Finish up
+echo "Backup is complete!"</code></pre>
+        </div>
+
+        <div>
+          <h3 class="text-xl font-semibold mb-2">Python Script (Check Hard Drive Space)</h3>
+          <p class="mb-2">Python is great for logic and math. This script warns you if your hard drive is getting full.</p>
+          <pre><code>import shutil
+
+# Get hard drive stats for the main folder ("/")
+total, used, free = shutil.disk_usage("/")
+
+# Convert bytes to Gigabytes (GB)
+free_gb = free // (2**30)
+
+print(f"You have {free_gb} GB of free space left.")
+
+if free_gb < 10:
+    print("WARNING: Disk is almost full! Clean up your files.")
+else:
+    print("Disk space looks healthy.")</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Packages and Tools -->
+    <section class="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-md border-l-4 border-green-500">
+      <h2 class="text-2xl font-bold mb-4">5. Awesome Packages to Load</h2>
+      <p class="mb-4 text-lg">You can install these open-source tools using Red Hat's package manager, <code>dnf</code>.</p>
+      <ul class="list-disc pl-6 space-y-3">
+        <li><strong>epel-release:</strong> The "Extra Packages for Enterprise Linux" vault. Always install this first to unlock hundreds of free tools! <code>sudo dnf install epel-release</code></li>
+        <li><strong>htop:</strong> A beautiful, colorful version of the standard <code>top</code> command. It makes reading computer memory and CPU usage super easy.</li>
+        <li><strong>tmux:</strong> Lets you split your single black terminal screen into multiple boxes so you can do three things at once.</li>
+        <li><strong>tldr:</strong> Standard manual pages are too long. "Too Long; Didn't Read" gives you the 5 most common examples of any command instantly.</li>
+      </ul>
+    </section>
+
+    <!-- Cheat Sheet -->
+    <section>
+      <h2 class="text-2xl font-bold mb-4 text-ibmBlue dark:text-blue-400">6. The Cheat Sheet</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse border border-gray-300 dark:border-gray-700">
+          <thead>
+            <tr class="bg-gray-200 dark:bg-gray-700">
+              <th class="p-3 border border-gray-300 dark:border-gray-600">Task</th>
+              <th class="p-3 border border-gray-300 dark:border-gray-600">Command to Type</th>
+              <th class="p-3 border border-gray-300 dark:border-gray-600">What it actually does</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Where am I?</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700 font-mono text-sm bg-gray-50 dark:bg-gray-800">pwd</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Print Working Directory (shows your current folder).</td>
+            </tr>
+            <tr>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">List files</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700 font-mono text-sm bg-gray-50 dark:bg-gray-800">ls -la</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Lists everything, including hidden files, in a neat vertical line.</td>
+            </tr>
+            <tr>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Install software</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700 font-mono text-sm bg-gray-50 dark:bg-gray-800">sudo dnf install [name]</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Downloads and installs a program automatically.</td>
+            </tr>
+            <tr>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Find text in a file</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700 font-mono text-sm bg-gray-50 dark:bg-gray-800">grep "error" log.txt</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Searches inside 'log.txt' for the word "error".</td>
+            </tr>
+            <tr>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Check IP Address</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700 font-mono text-sm bg-gray-50 dark:bg-gray-800">ip a</td>
+              <td class="p-3 border border-gray-300 dark:border-gray-700">Shows your computer's network addresses.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODALS (Popups) -->
+  
+  <!-- Docs Modal -->
+  <div id="docsModal" class="modal fixed inset-0 bg-black bg-opacity-60 justify-center items-center z-50 p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl max-w-lg w-full relative border-t-8 border-ibmBlue">
+      <h2 class="text-2xl font-bold mb-4 text-ibmBlue dark:text-blue-400">Official References</h2>
+      <p class="mb-4">To pass the exam, you need to know exactly what they will test you on. Here are the official rulebooks:</p>
+      <ul class="list-disc pl-5 mb-6 space-y-2">
+        <li><a href="https://www.redhat.com/en/services/training/ex200-red-hat-certified-system-administrator-rhcsa-exam" target="_blank" class="text-ibmBlue dark:text-blue-400 font-bold hover:underline">Official EX200 Exam Objectives</a> - Read this! It tells you exactly what tasks you must memorize.</li>
+        <li><a href="https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/" target="_blank" class="text-ibmBlue dark:text-blue-400 font-bold hover:underline">RHEL 9 Product Documentation</a> - The massive dictionary of how to do everything.</li>
+      </ul>
+      <button onclick="closeModal('docsModal')" class="bg-gray-200 text-black dark:bg-gray-700 dark:text-white px-6 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition w-full font-bold">
+        Got it! Close this.
+      </button>
+    </div>
+  </div>
+
+  <!-- SELinux Modal -->
+  <div id="selinuxModal" class="modal fixed inset-0 bg-black bg-opacity-60 justify-center items-center z-50 p-4 backdrop-blur-sm">
+    <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-2xl max-w-lg w-full relative border-t-8 border-red-500">
+      <h2 class="text-2xl font-bold mb-4 text-red-600 dark:text-red-400">What is SELinux?</h2>
+      <p class="mb-4"><strong>Security-Enhanced Linux</strong> is like an internal police force inside the computer. </p>
+      <p class="mb-4">Normal Linux permissions say: <em>"Can this user read this file?"</em><br> 
+      SELinux goes further and says: <em>"Is this Web Server program even ALLOWED to look at files in this specific folder?"</em></p>
+      <p class="mb-6 bg-red-100 dark:bg-red-900 p-3 rounded text-sm border border-red-200 dark:border-red-700">
+        <strong>Admin Tip:</strong> During the exam, never permanently turn SELinux off! You will fail immediately. You must learn to fix the labels instead.
+      </p>
+      <button onclick="closeModal('selinuxModal')" class="bg-gray-200 text-black dark:bg-gray-700 dark:text-white px-6 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition w-full font-bold">
+        Close
+      </button>
+    </div>
+  </div>
+
+  <!-- JavaScript for Interactions -->
+  <script>
+    // 1. Font Size Increaser (14px to 36px)
+    let currentFontSize = 14;
+    function changeFontSize() {
+      currentFontSize += 2; // Jump by 2px each click
+      if (currentFontSize > 36) {
+        currentFontSize = 14; // Loop back to 14 when it gets too big
+      }
+      
+      // Apply the size to the HTML root element. 
+      // Tailwind uses 'rem' which scales perfectly with the root font size!
+      document.documentElement.style.fontSize = currentFontSize + 'px';
+      
+      // Update the button text
+      document.getElementById('fontSizeBtn').innerText = 'Size: ' + currentFontSize + 'px';
+    }
+
+    // 2. Dark / Light Mode Toggle
+    function toggleDarkMode() {
+      const htmlElement = document.documentElement;
+      if (htmlElement.classList.contains('dark')) {
+        htmlElement.classList.remove('dark');
+        htmlElement.classList.add('light');
+      } else {
+        htmlElement.classList.remove('light');
+        htmlElement.classList.add('dark');
+      }
+    }
+
+    // 3. Modal Open and Close Functions
+    function openModal(modalId) {
+      document.getElementById(modalId).classList.add('active');
+    }
+    
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+    
+    // Allow clicking outside the modal box to close it
+    window.onclick = function(event) {
+      if (event.target.classList.contains('modal')) {
+        event.target.classList.remove('active');
+      }
+    }
+  </script>
+</body>
+</html>
