@@ -1,0 +1,39 @@
+# =============================================================
+#  Copy to terraform.tfvars and fill in YOUR values.
+#  terraform.tfvars is git-ignored. NEVER commit it.
+#
+#  Better still, keep the token out of files entirely:
+#    export TF_VAR_artifactory_token="your-token"
+# =============================================================
+
+aws_region   = "us-east-1"
+project_name = "keycloak"
+environment  = "dev"
+
+# ---- DNS / TLS ----
+domain_name         = "auth.example.com"
+route53_zone_name   = "example.com"                                            # "" to skip DNS
+acm_certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/REPLACE"  # same region as ALB
+
+# ---- Artifactory ----
+keycloak_image       = "mycompany.jfrog.io/docker-local/keycloak:26.4.0"
+artifactory_host     = "mycompany.jfrog.io"
+artifactory_username = "svc-keycloak-deploy"
+artifactory_token    = "REPLACE-ME"
+
+# ---- Sizing ----
+instance_type = "t3.medium"
+asg_min_size  = 2
+asg_max_size  = 6
+
+db_instance_class    = "db.t3.medium"
+db_allocated_storage = 20
+db_multi_az          = true
+
+# ---- Cost / resilience ----
+single_nat_gateway = false   # true saves ~$35/mo, costs AZ independence
+enable_flow_logs   = true
+
+# ---- Safety ----
+enable_deletion_protection = true
+db_skip_final_snapshot     = false

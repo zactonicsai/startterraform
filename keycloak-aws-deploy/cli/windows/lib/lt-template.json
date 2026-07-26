@@ -1,0 +1,29 @@
+{
+  "ImageId": "@@AMI_ID@@",
+  "InstanceType": "@@INSTANCE_TYPE@@",
+  "IamInstanceProfile": { "Name": "@@ROLE_NAME@@" },
+  "SecurityGroupIds": ["@@SG_APP@@"],
+  "UserData": "@@USER_DATA_B64@@",
+  "MetadataOptions": {
+    "HttpEndpoint": "enabled",
+    "HttpTokens": "required",
+    "HttpPutResponseHopLimit": 2,
+    "InstanceMetadataTags": "enabled"
+  },
+  "Monitoring": { "Enabled": true },
+  "BlockDeviceMappings": [{
+    "DeviceName": "/dev/xvda",
+    "Ebs": {
+      "VolumeSize": 30,
+      "VolumeType": "gp3",
+      "Encrypted": true,
+      "DeleteOnTermination": true
+    }
+  }],
+  "TagSpecifications": [
+    { "ResourceType": "instance",
+      "Tags": [{"Key":"Name","Value":"@@PROJECT@@-node"},{"Key":"Project","Value":"@@PROJECT@@"}] },
+    { "ResourceType": "volume",
+      "Tags": [{"Key":"Name","Value":"@@PROJECT@@-volume"},{"Key":"Project","Value":"@@PROJECT@@"}] }
+  ]
+}

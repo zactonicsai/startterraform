@@ -1,0 +1,113 @@
+#!/bin/bash
+# ============================================================================
+# Keycloak EC2 bootstrap script
+# Runs automatically on first boot. Generated from templates/user-data.sh.tmpl
+# by cli/*/07-launch-template.*  --  do not edit the generated copy.
+#
+# Tokens replaced at generation time:
+#   @@AWS_REGION@@ @@DB_SECRET_ARN@@ @@ART_SECRET_ARN@@ @@KC_SECRET_ARN@@
+#   @@ARTIFACTORY_HOST@@ @@KC_IMAGE@@ @@DB_ENDPOINT@@ @@DOMAIN_NAME@@
+#   @@LOG_GROUP@@
+# ============================================================================
+set -euo pipefail
+exec > >(tee /var/log/keycloak-bootstrap.log | logger -t keycloak-bootstrap) 2>&1
+
+echo "=== Keycloak bootstrap starting at $(date -u) ==="
+
+REGION="@@AWS_REGION@@"
+
+# ---------- 1. Install prerequisites ----------
+dnf update -y
+dnf install -y docker jq awscli
+systemctl enable --now docker
+
+# ---------- 2. Fetch secrets via the instance IAM role ----------
+# No credentials are stored on this machine. The AWS CLI reads the role
+# from the instance metadata service (IMDSv2).
+DB_JSON=$(aws secretsmanager get-secret-value \
+  --secret-id "@@DB_SECRET_ARN@@" --region "$REGION" \
+  --query SecretString --output text)
+DB_USER=$(echo "$DB_JSON" | jq -r .username)
+DB_PASS=$(echo "$DB_JSON" | jq -r .password)
+
+ART_JSON=$(aws secretsmanager get-secret-value \
+  --secret-id "@@ART_SECRET_ARN@@" --region "$REGION" \
+  --query SecretString --output text)
+ART_USER=$(echo "$ART_JSON" | jq -r .username)
+ART_TOKEN=$(echo "$ART_JSON" | jq -r .token)
+
+KC_JSON=$(aws secretsmanager get-secret-value \
+  --secret-id "@@KC_SECRET_ARN@@" --region "$REGION" \
+  --query SecretString --output text)
+KC_USER=$(echo "$KC_JSON" | jq -r .username)
+KC_PASS=$(echo "$KC_JSON" | jq -r .password)
+
+# ---------- 3. Log in to Artifactory and pull the image ----------
+# --password-stdin keeps the token out of the process list.
+echo "$ART_TOKEN" | docker login "@@ARTIFACTORY_HOST@@" \
+  --username "$ART_USER" --password-stdin
+
+PULLED=no
+for attempt in 1 2 3 4 5; do
+  if docker pull "@@KC_IMAGE@@"; then
+    echo "Image pulled on attempt $attempt"
+    PULLED=yes
+    break
+  fi
+  echo "Pull attempt $attempt failed; retrying in 15s"
+  sleep 15
+done
+
+# Remove registry credentials from disk immediately after the pull.
+docker logout "@@ARTIFACTORY_HOST@@" || true
+rm -f /root/.docker/config.json
+
+if [ "$PULLED" != "yes" ]; then
+  echo "FATAL: could not pull @@KC_IMAGE@@ after 5 attempts"
+  exit 1
+fi
+
+# ---------- 4. Run Keycloak ----------
+docker run -d \
+  --name keycloak \
+  --restart unless-stopped \
+  --network host \
+  --log-driver=awslogs \
+  --log-opt awslogs-region="$REGION" \
+  --log-opt awslogs-group="@@LOG_GROUP@@" \
+  --log-opt awslogs-create-group=true \
+  -e KC_DB=postgres \
+  -e KC_DB_URL="jdbc:postgresql://@@DB_ENDPOINT@@:5432/keycloak" \
+  -e KC_DB_USERNAME="$DB_USER" \
+  -e KC_DB_PASSWORD="$DB_PASS" \
+  -e KC_DB_POOL_INITIAL_SIZE=5 \
+  -e KC_DB_POOL_MIN_SIZE=5 \
+  -e KC_DB_POOL_MAX_SIZE=20 \
+  -e KC_HOSTNAME="https://@@DOMAIN_NAME@@" \
+  -e KC_HTTP_ENABLED=true \
+  -e KC_HTTP_PORT=8080 \
+  -e KC_PROXY_HEADERS=xforwarded \
+  -e KC_HEALTH_ENABLED=true \
+  -e KC_METRICS_ENABLED=true \
+  -e KC_HTTP_MANAGEMENT_PORT=9000 \
+  -e KC_CACHE=ispn \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME="$KC_USER" \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD="$KC_PASS" \
+  -e JAVA_OPTS_APPEND="-XX:MaxRAMPercentage=70" \
+  "@@KC_IMAGE@@" \
+  start --cache-stack=jdbc-ping
+
+echo "=== Container started, waiting for readiness ==="
+
+# ---------- 5. Block until Keycloak reports ready ----------
+for i in $(seq 1 60); do
+  if curl -fsS http://localhost:9000/health/ready > /dev/null 2>&1; then
+    echo "Keycloak READY after $((i * 5)) seconds"
+    exit 0
+  fi
+  sleep 5
+done
+
+echo "ERROR: Keycloak did not become ready within 5 minutes"
+docker logs keycloak --tail 200 || true
+exit 1

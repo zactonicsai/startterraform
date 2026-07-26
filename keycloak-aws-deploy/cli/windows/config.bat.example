@@ -1,0 +1,33 @@
+@echo off
+REM =============================================================
+REM  Keycloak on AWS - Windows configuration
+REM  Copy to config.bat and fill in YOUR values.
+REM  config.bat is git-ignored. Never commit it.
+REM =============================================================
+
+REM ---- AWS ----
+set AWS_REGION=us-east-1
+set PROJECT=keycloak-demo
+
+REM ---- DNS / TLS ----
+set DOMAIN_NAME=auth.example.com
+set ROUTE53_ZONE_NAME=example.com
+set ACM_CERT_ARN=arn:aws:acm:us-east-1:111122223333:certificate/REPLACE-ME
+
+REM ---- Artifactory ----
+set ARTIFACTORY_HOST=mycompany.jfrog.io
+set ARTIFACTORY_USER=svc-keycloak-deploy
+set ARTIFACTORY_TOKEN=REPLACE-ME
+set KC_IMAGE=mycompany.jfrog.io/docker-local/keycloak:26.4.0
+
+REM ---- Sizing ----
+set INSTANCE_TYPE=t3.medium
+set ASG_MIN=2
+set ASG_MAX=6
+set DB_INSTANCE_CLASS=db.t3.medium
+set DB_ALLOCATED_STORAGE=20
+
+REM ---- Cost / resilience switches ----
+set SINGLE_NAT=false
+set DB_MULTI_AZ=true
+set DB_BACKUP_RETENTION=7

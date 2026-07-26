@@ -1,0 +1,29 @@
+# Secrets and local config -- NEVER COMMIT
+config.env
+cli/windows/config.bat
+terraform/terraform.tfvars
+*.pem
+*.key
+
+# Generated state
+state/
+cli/linux-mac/state/
+cli/windows/state/
+*-generated.sh
+user-data-generated.sh
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+destroy.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+
+# OS noise
+.DS_Store
+Thumbs.db
