@@ -1,0 +1,184 @@
+#!/bin/bash
+# ===========================================================================
+# This script runs ONE TIME, automatically, the first time each EC2 server
+# boots. AWS calls it "user data". Everything it prints is saved to
+#   /var/log/keycloak-bootstrap.log
+# and to the console log you can read from the AWS web page.
+#
+# NOTE FOR READERS: this file is a Terraform template. Anything written as
+# a dollar sign followed by curly braces is replaced by Terraform before the
+# server ever sees it. Plain shell variables are written without braces.
+# ===========================================================================
+set -euo pipefail
+exec > /var/log/keycloak-bootstrap.log 2>&1
+set -x
+
+echo "=== Keycloak bootstrap started at $(date -u) ==="
+
+# --------------------------------------------------------------------------
+# STEP 1: install the tools we need.
+# docker = runs the container. jq = reads JSON. aws = talks to AWS.
+# --------------------------------------------------------------------------
+dnf install -y docker jq
+if ! command -v aws >/dev/null 2>&1; then
+  dnf install -y awscli-2 || dnf install -y aws-cli
+fi
+
+systemctl enable --now docker
+
+# Wait until the Docker daemon really answers, not just "started".
+for i in $(seq 1 30); do
+  if docker info >/dev/null 2>&1; then break; fi
+  echo "waiting for docker... attempt $i"
+  sleep 2
+done
+
+# --------------------------------------------------------------------------
+# STEP 2: find out who we are (IMDSv2 - the secure way to ask AWS).
+# --------------------------------------------------------------------------
+TOKEN=$(curl -sS -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+INSTANCE_ID=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/instance-id)
+PRIVATE_IP=$(curl -sS -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/local-ipv4)
+echo "I am $INSTANCE_ID at $PRIVATE_IP"
+
+export AWS_DEFAULT_REGION="${aws_region}"
+
+# --------------------------------------------------------------------------
+# STEP 3: read the database password out of AWS Secrets Manager.
+# The server is allowed to do this because of the IAM role attached to it.
+# The password is never written into Terraform code or into git.
+# --------------------------------------------------------------------------
+echo "Fetching database secret ${db_secret_name}"
+DB_SECRET=""
+for i in $(seq 1 10); do
+  if DB_SECRET=$(aws secretsmanager get-secret-value \
+        --secret-id "${db_secret_name}" \
+        --query SecretString --output text 2>/dev/null); then
+    break
+  fi
+  echo "secret fetch failed, retry $i"
+  sleep 6
+done
+
+if [ -z "$DB_SECRET" ]; then
+  echo "FATAL: could not read the database secret. Check the IAM role and NAT route."
+  exit 1
+fi
+
+DB_HOST=$(echo "$DB_SECRET" | jq -r .host)
+DB_PORT=$(echo "$DB_SECRET" | jq -r .port)
+DB_NAME=$(echo "$DB_SECRET" | jq -r .dbname)
+DB_USER=$(echo "$DB_SECRET" | jq -r .username)
+DB_PASS=$(echo "$DB_SECRET" | jq -r .password)
+echo "Database host resolved to $DB_HOST:$DB_PORT/$DB_NAME"
+
+# --------------------------------------------------------------------------
+# STEP 4: log in to Artifactory and pull the Keycloak image.
+# --------------------------------------------------------------------------
+%{ if artifactory_auth_enabled ~}
+echo "Logging in to Artifactory registry ${artifactory_registry}"
+ART_SECRET=$(aws secretsmanager get-secret-value \
+  --secret-id "${artifactory_secret_name}" \
+  --query SecretString --output text)
+ART_USER=$(echo "$ART_SECRET" | jq -r .username)
+ART_PASS=$(echo "$ART_SECRET" | jq -r .password)
+echo "$ART_PASS" | docker login "${artifactory_registry}" --username "$ART_USER" --password-stdin
+%{ else ~}
+echo "Artifactory authentication disabled - pulling anonymously"
+%{ endif ~}
+
+echo "Pulling ${keycloak_image}"
+PULL_OK=0
+for i in $(seq 1 5); do
+  if docker pull "${keycloak_image}"; then PULL_OK=1; break; fi
+  echo "pull failed, retry $i"
+  sleep 10
+done
+if [ "$PULL_OK" -ne 1 ]; then
+  echo "FATAL: could not pull the image. Check the registry name, the tag, the credentials and the NAT gateway."
+  exit 1
+fi
+
+# --------------------------------------------------------------------------
+# STEP 5: write the settings file.
+# Keycloak is configured entirely with environment variables. We put them in
+# a file with permissions 600 so the password never shows up in "ps" output.
+# --------------------------------------------------------------------------
+install -m 600 /dev/null /etc/keycloak.env
+cat > /etc/keycloak.env <<ENVEOF
+KC_DB=postgres
+KC_DB_URL_HOST=$DB_HOST
+KC_DB_URL_PORT=$DB_PORT
+KC_DB_URL_DATABASE=$DB_NAME
+KC_DB_USERNAME=$DB_USER
+KC_DB_PASSWORD=$DB_PASS
+KC_HTTP_ENABLED=true
+KC_HTTP_PORT=${keycloak_http_port}
+KC_HTTP_MANAGEMENT_PORT=${keycloak_management_port}
+KC_HEALTH_ENABLED=true
+KC_METRICS_ENABLED=true
+KC_PROXY_HEADERS=xforwarded
+KC_HOSTNAME_STRICT=false
+%{ if keycloak_hostname != "" ~}
+KC_HOSTNAME=${keycloak_hostname}
+%{ endif ~}
+%{ if keycloak_cache_stack != "" ~}
+KC_CACHE=ispn
+KC_CACHE_STACK=${keycloak_cache_stack}
+%{ endif ~}
+KEYCLOAK_ADMIN=${admin_username}
+KEYCLOAK_ADMIN_PASSWORD=${admin_password}
+KC_BOOTSTRAP_ADMIN_USERNAME=${admin_username}
+KC_BOOTSTRAP_ADMIN_PASSWORD=${admin_password}
+JAVA_OPTS_APPEND=${java_opts}
+${extra_env_lines}
+ENVEOF
+
+# --------------------------------------------------------------------------
+# STEP 6: start the container.
+#   --restart unless-stopped  -> comes back automatically after a reboot
+#   --env-file                -> settings from the file above
+#   -p 8080 / -p 9000         -> app port and health port
+# --------------------------------------------------------------------------
+docker rm -f keycloak 2>/dev/null || true
+
+docker run -d \
+  --name keycloak \
+  --restart unless-stopped \
+  --env-file /etc/keycloak.env \
+  -p ${keycloak_http_port}:${keycloak_http_port} \
+  -p ${keycloak_management_port}:${keycloak_management_port} \
+%{ if enable_cloudwatch_logs ~}
+  --log-driver=awslogs \
+  --log-opt awslogs-region=${aws_region} \
+  --log-opt awslogs-group=${log_group} \
+  --log-opt awslogs-stream=$INSTANCE_ID \
+  --log-opt awslogs-create-group=true \
+%{ else ~}
+  --log-driver=json-file \
+  --log-opt max-size=50m \
+  --log-opt max-file=3 \
+%{ endif ~}
+  "${keycloak_image}" \
+  start
+
+# --------------------------------------------------------------------------
+# STEP 7: wait for Keycloak to report "ready".
+# The first server also creates all the database tables, which can take a
+# couple of minutes. This loop only reports - it never fails the boot.
+# --------------------------------------------------------------------------
+echo "Waiting for Keycloak to become ready..."
+for i in $(seq 1 60); do
+  if curl -sf "http://localhost:${keycloak_management_port}/health/ready" >/dev/null; then
+    echo "=== Keycloak is READY after $((i * 5)) seconds ==="
+    exit 0
+  fi
+  sleep 5
+done
+
+echo "WARNING: Keycloak did not report ready in 5 minutes. Recent container log:"
+docker logs --tail 100 keycloak || true
+exit 0

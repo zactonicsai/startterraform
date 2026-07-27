@@ -1,0 +1,58 @@
+# ===========================================================================
+# .gitignore - things that must never reach a git repository.
+# ===========================================================================
+
+# --- State files ----------------------------------------------------------
+# These contain EVERYTHING, including the generated database password
+# in plain text. Never commit them.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.tfstate.lock.info
+
+# --- Downloaded provider plugins (hundreds of MB) -------------------------
+.terraform/
+.terraform.lock.hcl.bak
+
+# --- Saved plans (may contain sensitive values) ---------------------------
+*.tfplan
+tfplan.out
+plan.out
+
+# --- Variable files that may hold secrets ---------------------------------
+# NOTE: terraform.tfvars IS committed on purpose in this template - it holds
+# the default, non-secret settings and acts as documentation. If you put a
+# real password in it, uncomment the next line immediately.
+# terraform.tfvars
+*.auto.tfvars
+secrets.tfvars
+*-secrets.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# --- Credentials ----------------------------------------------------------
+*.pem
+*.key
+credentials
+.aws/
+
+# --- Logs and scratch -----------------------------------------------------
+*.log
+crash.log
+crash.*.log
+rendered.sh
+
+# --- Editors and operating systems ----------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- Keep the lock file! --------------------------------------------------
+# .terraform.lock.hcl SHOULD be committed. It pins exact provider versions
+# so everyone on the team builds with identical plugins.
+!.terraform.lock.hcl
