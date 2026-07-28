@@ -1,14 +1,14 @@
 ###############################################################################
 # 03-keycloak.tf
-# The Keycloak application server itself, running on one EC2 instance.
+# The Keycloak application server itself, running on one EC2 instance using Docker.
 #
 # Boot sequence handled by user_data below:
-#   1. Install Java 21 (Keycloak 26.x requires 21)
-#   2. Download and verify Keycloak 26.7.0
-#   3. Fetch the DB password from Secrets Manager using the IAM role
-#   4. Download the RDS certificate bundle so TLS can be verified properly
-#   5. Generate a self-signed cert for the admin console
-#   6. Build the optimized Keycloak image and start it under systemd
+#   1. Install Docker and standard tools
+#   2. Fetch the DB password from Secrets Manager using the IAM role
+#   3. Download the RDS certificate bundle so TLS can be verified properly
+#   4. Generate a self-signed PEM certificate for the admin console
+#   5. Build an optimized Keycloak Docker image locally 
+#   6. Start the Keycloak container under systemd
 ###############################################################################
 
 variable "keycloak_version" {
@@ -95,10 +95,6 @@ resource "aws_secretsmanager_secret_version" "keycloak_admin" {
 # ELASTIC IP
 # A permanent public IP. Without it, stopping and starting the instance hands
 # you a brand new address and your bookmark breaks.
-# Cost note: an EIP attached to a RUNNING instance is free. An EIP that is
-# idle (unattached, or attached to a stopped instance) costs ~$3.60/month.
-# Since Feb 2024 AWS also charges ~$3.60/month for every public IPv4 address
-# regardless, so budget for that either way.
 ###############################################################################
 
 resource "aws_eip" "keycloak" {
@@ -128,26 +124,16 @@ locals {
 set -euxo pipefail
 exec > >(tee /var/log/keycloak-bootstrap.log | logger -t keycloak-bootstrap) 2>&1
 
-echo "=== [1/8] Updating OS packages ==="
+echo "=== [1/8] Updating OS packages and installing Docker ==="
 dnf update -y
-dnf install -y java-21-amazon-corretto-headless jq unzip tar gzip awscli
+dnf install -y docker jq awscli tar gzip openssl
 
-echo "=== [2/8] Creating the keycloak service user ==="
-# A dedicated non-login user. If Keycloak is ever compromised the attacker
-# lands as an unprivileged account, not as root.
-useradd --system --shell /sbin/nologin --home-dir /opt/keycloak keycloak || true
+systemctl enable --now docker
 
-echo "=== [3/8] Downloading Keycloak ${var.keycloak_version} ==="
-cd /opt
-curl -fsSL -o keycloak.tar.gz \
-  "https://github.com/keycloak/keycloak/releases/download/${var.keycloak_version}/keycloak-${var.keycloak_version}.tar.gz"
-tar -xzf keycloak.tar.gz
-rm -f keycloak.tar.gz
-# Move into a stable path so upgrades are a symlink swap
-rm -rf /opt/keycloak
-mv "keycloak-${var.keycloak_version}" /opt/keycloak
+echo "=== [2/8] Creating the Keycloak configuration directories ==="
+mkdir -p /opt/keycloak/conf
 
-echo "=== [4/8] Reading secrets via the IAM instance role ==="
+echo "=== [3/8] Reading secrets via the IAM instance role ==="
 export AWS_DEFAULT_REGION="${data.aws_region.current.name}"
 
 DB_SECRET=$(aws secretsmanager get-secret-value \
@@ -162,25 +148,24 @@ KC_SECRET=$(aws secretsmanager get-secret-value \
 KC_ADMIN_USER=$(echo "$KC_SECRET" | jq -r .username)
 KC_ADMIN_PASS=$(echo "$KC_SECRET" | jq -r .password)
 
-echo "=== [5/8] Downloading the RDS certificate bundle ==="
+echo "=== [4/8] Downloading the RDS certificate bundle ==="
 # This lets us use sslmode=verify-full: the client checks that the
 # database really is who it claims to be, not just that TLS is on.
 curl -fsSL -o /opt/keycloak/conf/rds-ca.pem \
   "https://truststore.pki.rds.amazonaws.com/${data.aws_region.current.name}/${data.aws_region.current.name}-bundle.pem"
 chmod 644 /opt/keycloak/conf/rds-ca.pem
 
-echo "=== [6/8] Generating a TLS certificate for the console ==="
+echo "=== [5/8] Generating a TLS PEM certificate for the console ==="
 # Self-signed. Your browser will warn you; that is expected for a lab.
-# For real use, put an Application Load Balancer with an ACM certificate
-# in front, or run certbot against a real DNS name.
 PUBLIC_IP="${aws_eip.keycloak.public_ip}"
-keytool -genkeypair -storepass changeit -keyalg RSA -keysize 2048 \
-  -dname "CN=$PUBLIC_IP" \
-  -alias server -ext "SAN=IP:$PUBLIC_IP" \
-  -keystore /opt/keycloak/conf/server.keystore \
-  -validity 3650
+openssl req -x509 -newkey rsa:2048 -nodes -sha256 \
+  -keyout /opt/keycloak/conf/server.key.pem \
+  -out /opt/keycloak/conf/server.crt.pem \
+  -days 3650 \
+  -subj "/CN=$PUBLIC_IP" \
+  -addext "subjectAltName=IP:$PUBLIC_IP"
 
-echo "=== [7/8] Writing keycloak.conf ==="
+echo "=== [6/8] Writing keycloak.conf ==="
 cat > /opt/keycloak/conf/keycloak.conf <<KCCONF
 # ---- Database ----
 db=postgres
@@ -195,12 +180,10 @@ db-pool-max-size=20
 http-enabled=true
 http-port=8080
 https-port=8443
-https-key-store-file=/opt/keycloak/conf/server.keystore
-https-key-store-password=changeit
+https-certificate-file=/opt/keycloak/conf/server.crt.pem
+https-certificate-key-file=/opt/keycloak/conf/server.key.pem
 
 # ---- Hostname ----
-# Keycloak 26 requires an explicit hostname or it refuses to start in
-# production mode. It is baked into the tokens it issues.
 hostname=https://$PUBLIC_IP:8443
 hostname-strict=false
 
@@ -209,44 +192,47 @@ health-enabled=true
 metrics-enabled=true
 
 # ---- Logging ----
-log=console,file
-log-file=/var/log/keycloak/keycloak.log
+log=console
 log-level=INFO
 KCCONF
 
+# Ensure the 'keycloak' user inside the container (UID 1000) can read configurations
+chown -R 1000:1000 /opt/keycloak/conf
 chmod 600 /opt/keycloak/conf/keycloak.conf
-mkdir -p /var/log/keycloak
-chown -R keycloak:keycloak /opt/keycloak /var/log/keycloak
 
-echo "=== [8/8] Building and starting Keycloak ==="
-# 'kc.sh build' pre-compiles the config into a fast startup image.
-# Doing it once here saves ~30 seconds on every restart.
-sudo -u keycloak /opt/keycloak/bin/kc.sh build --db=postgres
+echo "=== [7/8] Building Optimized Keycloak Docker Image ==="
+# We pre-build the image here with the DB dialect so it boots incredibly fast.
+cat > /opt/keycloak/Dockerfile <<EOF
+FROM quay.io/keycloak/keycloak:${var.keycloak_version}
+ENV KC_DB=postgres
+RUN /opt/keycloak/bin/kc.sh build
+EOF
 
+cd /opt/keycloak
+docker build -t optimized-keycloak .
+
+echo "=== [8/8] Creating and enabling Systemd unit ==="
 cat > /etc/systemd/system/keycloak.service <<UNIT
 [Unit]
-Description=Keycloak Identity and Access Management
-After=network-online.target
-Wants=network-online.target
+Description=Keycloak Docker Service
+After=docker.service
+Requires=docker.service
 
 [Service]
-Type=exec
-User=keycloak
-Group=keycloak
-# Bootstrap admin: these variables create the first admin account on the
-# very first start, then are ignored on later starts.
-Environment=KC_BOOTSTRAP_ADMIN_USERNAME=$KC_ADMIN_USER
-Environment=KC_BOOTSTRAP_ADMIN_PASSWORD=$KC_ADMIN_PASS
-Environment=JAVA_OPTS_APPEND=-Xms512m -Xmx1024m
-ExecStart=/opt/keycloak/bin/kc.sh start --optimized
-Restart=on-failure
+TimeoutStartSec=0
+Restart=always
 RestartSec=15
-LimitNOFILE=102642
-# Hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=full
-ProtectHome=true
+ExecStartPre=-/usr/bin/docker rm -f keycloak
+ExecStart=/usr/bin/docker run --name keycloak \\
+  --ulimit nofile=102642:102642 \\
+  -p 8080:8080 -p 8443:8443 \\
+  -v /opt/keycloak/conf:/opt/keycloak/conf:ro \\
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=$KC_ADMIN_USER \\
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=$KC_ADMIN_PASS \\
+  -e JAVA_OPTS_APPEND="-Xms512m -Xmx1024m" \\
+  optimized-keycloak \\
+  start --optimized
+ExecStop=/usr/bin/docker stop keycloak
 
 [Install]
 WantedBy=multi-user.target

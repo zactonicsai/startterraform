@@ -19,3 +19,4 @@ logs/
 .vscode/
 .idea/
 keycloak-aws/terraform/tplan.out
+keycloak-aws/terraform/tplan2.out
