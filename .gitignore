@@ -18,3 +18,4 @@ logs/
 .DS_Store
 .vscode/
 .idea/
+keycloak-aws/terraform/tplan.out
