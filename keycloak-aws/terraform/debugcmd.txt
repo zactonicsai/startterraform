@@ -1,0 +1,281 @@
+cat /var/log/keycloak-bootstrap.log
++ echo '=== [1/8] Updating OS packages and installing Docker ==='
+=== [1/8] Updating OS packages and installing Docker ===
++ dnf update -y
+Amazon Linux 2023 repository                     53 MB/s |  72 MB     00:01
+Amazon Linux 2023 Kernel Livepatch repository   469 kB/s |  59 kB     00:00
+Dependencies resolved.
+Nothing to do.
+Complete!
++ dnf install -y docker jq awscli tar gzip openssl
+Last metadata expiration check: 0:00:03 ago on Tue Jul 28 23:26:49 2026.
+Package jq-1.8.1-60.amzn2023.aarch64 is already installed.
+Package awscli-2-2.33.15-1.amzn2023.0.1.noarch is already installed.
+Package tar-2:1.34-1.amzn2023.0.4.aarch64 is already installed.
+Package gzip-1.12-1.amzn2023.0.1.aarch64 is already installed.
+Package openssl-1:3.5.5-1.amzn2023.0.5.aarch64 is already installed.
+Dependencies resolved.
+================================================================================
+ Package                 Arch     Version                    Repository    Size
+================================================================================
+Installing:
+ docker                  aarch64  25.0.16-1.amzn2023.0.3     amazonlinux   36 M
+Installing dependencies:
+ container-selinux       noarch   4:2.245.0-1.amzn2023       amazonlinux   58 k
+ containerd              aarch64  2.2.5-1.amzn2023.0.1       amazonlinux   22 M
+ iptables-libs           aarch64  1.8.8-3.amzn2023.0.2       amazonlinux  424 k
+ iptables-nft            aarch64  1.8.8-3.amzn2023.0.2       amazonlinux  185 k
+ libcgroup               aarch64  3.0-1.amzn2023.0.1         amazonlinux   77 k
+ libnetfilter_conntrack  aarch64  1.0.8-2.amzn2023.0.2       amazonlinux   58 k
+ libnfnetlink            aarch64  1.0.1-19.amzn2023.0.2      amazonlinux   30 k
+ libnftnl                aarch64  1.2.2-2.amzn2023.0.2       amazonlinux   83 k
+ pigz                    aarch64  2.5-1.amzn2023.0.4         amazonlinux   78 k
+ runc                    aarch64  1.3.5-1.amzn2023.0.2       amazonlinux  3.5 M
+
+Transaction Summary
+================================================================================
+Install  11 Packages
+
+Total download size: 63 M
+Installed size: 271 M
+Downloading Packages:
+(1/11): container-selinux-2.245.0-1.amzn2023.no 1.3 MB/s |  58 kB     00:00
+(2/11): iptables-libs-1.8.8-3.amzn2023.0.2.aarc  18 MB/s | 424 kB     00:00
+(3/11): iptables-nft-1.8.8-3.amzn2023.0.2.aarch 5.6 MB/s | 185 kB     00:00
+(4/11): libcgroup-3.0-1.amzn2023.0.1.aarch64.rp 2.7 MB/s |  77 kB     00:00
+(5/11): libnetfilter_conntrack-1.0.8-2.amzn2023 2.0 MB/s |  58 kB     00:00
+(6/11): libnfnetlink-1.0.1-19.amzn2023.0.2.aarc 1.2 MB/s |  30 kB     00:00
+(7/11): libnftnl-1.2.2-2.amzn2023.0.2.aarch64.r 2.7 MB/s |  83 kB     00:00
+(8/11): pigz-2.5-1.amzn2023.0.4.aarch64.rpm     2.9 MB/s |  78 kB     00:00
+(9/11): containerd-2.2.5-1.amzn2023.0.1.aarch64  74 MB/s |  22 MB     00:00
+(10/11): runc-1.3.5-1.amzn2023.0.2.aarch64.rpm   41 MB/s | 3.5 MB     00:00
+(11/11): docker-25.0.16-1.amzn2023.0.3.aarch64.  76 MB/s |  36 MB     00:00
+--------------------------------------------------------------------------------
+Total                                           121 MB/s |  63 MB     00:00
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1
+  Installing       : runc-1.3.5-1.amzn2023.0.2.aarch64                     1/11
+  Installing       : containerd-2.2.5-1.amzn2023.0.1.aarch64               2/11
+  Running scriptlet: containerd-2.2.5-1.amzn2023.0.1.aarch64               2/11
+  Installing       : pigz-2.5-1.amzn2023.0.4.aarch64                       3/11
+  Installing       : libnftnl-1.2.2-2.amzn2023.0.2.aarch64                 4/11
+  Installing       : libnfnetlink-1.0.1-19.amzn2023.0.2.aarch64            5/11
+  Installing       : libnetfilter_conntrack-1.0.8-2.amzn2023.0.2.aarch6    6/11
+  Installing       : iptables-libs-1.8.8-3.amzn2023.0.2.aarch64            7/11
+  Installing       : iptables-nft-1.8.8-3.amzn2023.0.2.aarch64             8/11
+  Running scriptlet: iptables-nft-1.8.8-3.amzn2023.0.2.aarch64             8/11
+  Installing       : libcgroup-3.0-1.amzn2023.0.1.aarch64                  9/11
+  Running scriptlet: container-selinux-4:2.245.0-1.amzn2023.noarch        10/11
+  Installing       : container-selinux-4:2.245.0-1.amzn2023.noarch        10/11
+  Running scriptlet: container-selinux-4:2.245.0-1.amzn2023.noarch        10/11
+  Running scriptlet: docker-25.0.16-1.amzn2023.0.3.aarch64                11/11
+  Installing       : docker-25.0.16-1.amzn2023.0.3.aarch64                11/11
+  Running scriptlet: docker-25.0.16-1.amzn2023.0.3.aarch64                11/11
+Created symlink /etc/systemd/system/sockets.target.wants/docker.socket → /usr/lib/systemd/system/docker.socket.
+
+  Running scriptlet: container-selinux-4:2.245.0-1.amzn2023.noarch        11/11
+  Running scriptlet: docker-25.0.16-1.amzn2023.0.3.aarch64                11/11
+  Verifying        : container-selinux-4:2.245.0-1.amzn2023.noarch         1/11
+  Verifying        : containerd-2.2.5-1.amzn2023.0.1.aarch64               2/11
+  Verifying        : docker-25.0.16-1.amzn2023.0.3.aarch64                 3/11
+  Verifying        : iptables-libs-1.8.8-3.amzn2023.0.2.aarch64            4/11
+  Verifying        : iptables-nft-1.8.8-3.amzn2023.0.2.aarch64             5/11
+  Verifying        : libcgroup-3.0-1.amzn2023.0.1.aarch64                  6/11
+  Verifying        : libnetfilter_conntrack-1.0.8-2.amzn2023.0.2.aarch6    7/11
+  Verifying        : libnfnetlink-1.0.1-19.amzn2023.0.2.aarch64            8/11
+  Verifying        : libnftnl-1.2.2-2.amzn2023.0.2.aarch64                 9/11
+  Verifying        : pigz-2.5-1.amzn2023.0.4.aarch64                      10/11
+  Verifying        : runc-1.3.5-1.amzn2023.0.2.aarch64                    11/11
+
+Installed:
+  container-selinux-4:2.245.0-1.amzn2023.noarch
+  containerd-2.2.5-1.amzn2023.0.1.aarch64
+  docker-25.0.16-1.amzn2023.0.3.aarch64
+  iptables-libs-1.8.8-3.amzn2023.0.2.aarch64
+  iptables-nft-1.8.8-3.amzn2023.0.2.aarch64
+  libcgroup-3.0-1.amzn2023.0.1.aarch64
+  libnetfilter_conntrack-1.0.8-2.amzn2023.0.2.aarch64
+  libnfnetlink-1.0.1-19.amzn2023.0.2.aarch64
+  libnftnl-1.2.2-2.amzn2023.0.2.aarch64
+  pigz-2.5-1.amzn2023.0.4.aarch64
+  runc-1.3.5-1.amzn2023.0.2.aarch64
+
+Complete!
++ systemctl enable --now docker
+Created symlink /etc/systemd/system/multi-user.target.wants/docker.service → /usr/lib/systemd/system/docker.service.
++ echo '=== [2/8] Creating the Keycloak configuration directories ==='
+=== [2/8] Creating the Keycloak configuration directories ===
++ mkdir -p /opt/keycloak/conf
++ echo '=== [3/8] Reading secrets via the IAM instance role ==='
+=== [3/8] Reading secrets via the IAM instance role ===
++ export AWS_DEFAULT_REGION=us-east-1
++ AWS_DEFAULT_REGION=us-east-1
+++ aws secretsmanager get-secret-value --secret-id keycloak-demo/db-credentials-6fd139 --query SecretString --output text
++ DB_SECRET='{"dbname":"keycloak","engine":"postgres","host":"keycloak-demo-db.cshyikuwi6xh.us-east-1.rds.amazonaws.com","password":"4tpcYR\u0026Fd?%*_B5w8u\u003c+l0Mr3TeE0pS\u0026","port":5432,"username":"kcadmin"}'
+++ jq -r .username
+++ echo '{"dbname":"keycloak","engine":"postgres","host":"keycloak-demo-db.cshyikuwi6xh.us-east-1.rds.amazonaws.com","password":"4tpcYR\u0026Fd?%*_B5w8u\u003c+l0Mr3TeE0pS\u0026","port":5432,"username":"kcadmin"}'
++ DB_USER=kcadmin
+++ jq -r .password
+++ echo '{"dbname":"keycloak","engine":"postgres","host":"keycloak-demo-db.cshyikuwi6xh.us-east-1.rds.amazonaws.com","password":"4tpcYR\u0026Fd?%*_B5w8u\u003c+l0Mr3TeE0pS\u0026","port":5432,"username":"kcadmin"}'
++ DB_PASS='4tpcYR&Fd?%*_B5w8u<+l0Mr3TeE0pS&'
+++ aws secretsmanager get-secret-value --secret-id keycloak-demo/db-keycloak-admin-6fd139 --query SecretString --output text
++ KC_SECRET='{"password":"7vXtcZHn_vwd+75RABvNt5js","username":"kcadmin"}'
+++ jq -r .username
+++ echo '{"password":"7vXtcZHn_vwd+75RABvNt5js","username":"kcadmin"}'
++ KC_ADMIN_USER=kcadmin
+++ jq -r .password
+++ echo '{"password":"7vXtcZHn_vwd+75RABvNt5js","username":"kcadmin"}'
++ KC_ADMIN_PASS=7vXtcZHn_vwd+75RABvNt5js
++ echo '=== [4/8] Downloading the RDS certificate bundle ==='
+=== [4/8] Downloading the RDS certificate bundle ===
++ curl -fsSL -o /opt/keycloak/conf/rds-ca.pem https://truststore.pki.rds.amazonaws.com/us-east-1/us-east-1-bundle.pem
++ chmod 644 /opt/keycloak/conf/rds-ca.pem
++ echo '=== [5/8] Generating a TLS PEM certificate for the console ==='
+=== [5/8] Generating a TLS PEM certificate for the console ===
++ PUBLIC_IP=32.199.216.27
++ openssl req -x509 -newkey rsa:2048 -nodes -sha256 -keyout /opt/keycloak/conf/server.key.pem -out /opt/keycloak/conf/server.crt.pem -days 3650 -subj /CN=32.199.216.27 -addext subjectAltName=IP:32.199.216.27
+..+......+.+.....+.+...+.....+....+++++++++++++++++++++++++++++++++++++++*..+.....+.+++++++++++++++++++++++++++++++++++++++*.....+.....+....+........+....+...+..................+.....+...+......+..........+...+......+...............+......+.....+...................+..............+......+.+.....+.+.....+...+.......+.....+...+....+......+..+.........+.+...+.................+..........+.................+.+.....+.+.....+....+......+...+..+...+.......+...+......+.....+....+..+....+.................+....+........+...............+.+.....+......+......+.......+..+.+..+................+.....+.........+...+.........+...+.+..+..........+.....+...+..........+......+.........+..+.......+...+........+.+...........+...+......+......+....+...+......+..+............+......+......+.+...+.....+......+...+.+......+......+..+.......+...+..+.+............+..+......+............+......+.++++++
+...+...+......+....+..+...+...+....+......+...+++++++++++++++++++++++++++++++++++++++*...+.....+...+.+.....+.+..............+....+......+...+..+...+...+...+....+..+.+...+.........+.....+.+..+....+.....+.............+...+.....+...+.+...+..+....+......+.........+.....+.........+.......+...+...+.....+.......+..+.+..+.+.........+..+..........+++++++++++++++++++++++++++++++++++++++*....+.+........+....+...+..+....................................+....+......+.....+.+........+...+...+......+...................+..+.......+.....+.+..+...............+..........+..............+....+...........+...+.+.....+.+......+...............+...+..+.........+...+..........+........+....+......+.....+...+.........+.............+.....+...................+.........+...........+..........+...+.....................+..+.......+..+.+...+.....+.........+.+..+...+....+...........+.+......+............+........+.........+....+.........+...+.........+......+..+.+...........+.+...+.........+..+.+..............+....+..+.........+.+............+........+....+...++++++
+-----
++ echo '=== [6/8] Writing keycloak.conf ==='
+=== [6/8] Writing keycloak.conf ===
++ cat
++ chown -R 1000:1000 /opt/keycloak/conf
++ chmod 600 /opt/keycloak/conf/keycloak.conf
++ echo '=== [7/8] Building Optimized Keycloak Docker Image ==='
+=== [7/8] Building Optimized Keycloak Docker Image ===
++ cat
++ cd /opt/keycloak
++ docker build -t optimized-keycloak .
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 177B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for quay.io/keycloak/keycloak:26.7.0
+#2 DONE 0.4s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/2] FROM quay.io/keycloak/keycloak:26.7.0@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13
+#4 resolve quay.io/keycloak/keycloak:26.7.0@sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13 0.0s done
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 0B / 83.43MB 0.1s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 0B / 175.57MB 0.1s
+#4 sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13 2.36kB / 2.36kB done
+#4 sha256:043c86f180b45ff61331a9b7ad8ba9eb713b7862685a54a2c8595314bd6c9f18 1.06kB / 1.06kB done
+#4 sha256:1732167d95fe12e97e31e8989d307d0604d8b32bebe906b534b5711469b8c2f1 9.69kB / 9.69kB done
+#4 sha256:b6282f7e026511006101bde355f8eded51e84ec4bcd1272f4ae3cb1d9a6c6ffa 0B / 6.65MB 0.1s
+#4 extracting sha256:b6282f7e026511006101bde355f8eded51e84ec4bcd1272f4ae3cb1d9a6c6ffa
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 7.34MB / 83.43MB 0.3s
+#4 sha256:b6282f7e026511006101bde355f8eded51e84ec4bcd1272f4ae3cb1d9a6c6ffa 6.65MB / 6.65MB 0.2s done
+#4 sha256:3d7c6b3f9e8eff49b47305f0f71dc3137ad68c4113245dd420f34e306d14041a 0B / 549B 0.3s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 15.73MB / 83.43MB 0.4s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 15.73MB / 175.57MB 0.4s
+#4 sha256:3d7c6b3f9e8eff49b47305f0f71dc3137ad68c4113245dd420f34e306d14041a 549B / 549B 0.3s done
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 21.45MB / 83.43MB 0.5s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 25.17MB / 175.57MB 0.6s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 35.65MB / 83.43MB 0.8s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 41.94MB / 175.57MB 0.8s
+#4 extracting sha256:b6282f7e026511006101bde355f8eded51e84ec4bcd1272f4ae3cb1d9a6c6ffa 0.5s done
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 49.28MB / 83.43MB 1.0s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 57.67MB / 83.43MB 1.1s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 62.50MB / 175.57MB 1.1s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 66.06MB / 83.43MB 1.3s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 73.40MB / 175.57MB 1.3s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 73.40MB / 83.43MB 1.4s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 77.59MB / 83.43MB 1.5s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 82.84MB / 175.57MB 1.5s
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 83.43MB / 83.43MB 1.6s
+#4 extracting sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe
+#4 sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 83.43MB / 83.43MB 1.6s done
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 104.86MB / 175.57MB 1.8s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 116.39MB / 175.57MB 2.0s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 133.17MB / 175.57MB 2.2s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 144.70MB / 175.57MB 2.5s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 158.33MB / 175.57MB 2.8s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 175.57MB / 175.57MB 3.0s
+#4 sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 175.57MB / 175.57MB 3.0s done
+#4 extracting sha256:2758b9930fee4f194b83d383848b6dbdf3994c567389e7647bb41fdce69cdefe 3.2s done
+#4 extracting sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342
+#4 extracting sha256:00e3f85e1dab033f105b6c2e4f067870e255b959e4e6e514e285895af6425342 2.2s done
+#4 extracting sha256:3d7c6b3f9e8eff49b47305f0f71dc3137ad68c4113245dd420f34e306d14041a
+#4 extracting sha256:3d7c6b3f9e8eff49b47305f0f71dc3137ad68c4113245dd420f34e306d14041a done
+#4 DONE 7.4s
+
+#5 [2/2] RUN /opt/keycloak/bin/kc.sh build
+#5 1.950 Updating the configuration and installing your custom providers, if any. Please wait.
+#5 9.231 2026-07-28 23:27:50,253 WARN  [org.keycloak.common.Profile] (build-4) Deprecated features identity-brokering-api:v1, twitter-broker:v1 enabled by default. Check the upgrading guide for steps to use later versions if available.
+#5 18.94 2026-07-28 23:27:59,963 INFO  [io.quarkus.deployment.QuarkusAugmentor] (main) Quarkus augmentation completed in 14917ms
+#5 18.97 Server configuration updated and persisted. Run the following command to review the configuration:
+#5 18.97
+#5 18.97        kc.sh show-config
+#5 18.97
+#5 DONE 19.1s
+
+#6 exporting to image
+#6 exporting layers
+#6 exporting layers 1.3s done
+#6 writing image sha256:c263d59453708aa3c81a58e134d01958111db41737580d6b5f7b56a540541084 done
+#6 naming to docker.io/library/optimized-keycloak done
+#6 DONE 1.3s
++ echo '=== [8/8] Creating and enabling Systemd unit ==='
+=== [8/8] Creating and enabling Systemd unit ===
++ cat
++ systemctl daemon-reload
++ systemctl enable --now keycloak
+Created symlink /etc/systemd/system/multi-user.target.wants/keycloak.service → /etc/systemd/system/keycloak.service.
++ echo '=== Bootstrap complete. Keycloak starting on https://32.199.216.27:8443 ==='
+=== Bootstrap complete. Keycloak starting on https://32.199.216.27:8443 ===
+[root@ip-10-42-1-162 ~]#
+[root@ip-10-42-1-162 ~]# sudo journalctl -u keycloak.service -e
+Jul 28 23:41:31 ip-10-42-1-162.ec2.internal systemd[1]: Starting keycloak.service - Keycloak Docker Service...
+Jul 28 23:41:31 ip-10-42-1-162.ec2.internal docker[42013]: keycloak
+Jul 28 23:41:31 ip-10-42-1-162.ec2.internal systemd[1]: Started keycloak.service - Keycloak Docker Service.
+Jul 28 23:41:32 ip-10-42-1-162.ec2.internal docker[42019]: Appending additional Java properties to JAVA_OPTS
+Jul 28 23:41:33 ip-10-42-1-162.ec2.internal docker[42019]: The following build time options have values that differ from what is persisted - the new values will NOT >
+Jul 28 23:41:33 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Main process exited, code=exited, status=2/INVALIDARGUMENT
+Jul 28 23:41:33 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Failed with result 'exit-code'.
+Jul 28 23:41:49 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Scheduled restart job, restart counter is at 48.
+Jul 28 23:41:49 ip-10-42-1-162.ec2.internal systemd[1]: Stopped keycloak.service - Keycloak Docker Service.
+Jul 28 23:41:49 ip-10-42-1-162.ec2.internal systemd[1]: Starting keycloak.service - Keycloak Docker Service...
+Jul 28 23:41:49 ip-10-42-1-162.ec2.internal docker[42301]: keycloak
+Jul 28 23:41:49 ip-10-42-1-162.ec2.internal systemd[1]: Started keycloak.service - Keycloak Docker Service.
+Jul 28 23:41:49 ip-10-42-1-162.ec2.internal docker[42306]: Appending additional Java properties to JAVA_OPTS
+Jul 28 23:41:50 ip-10-42-1-162.ec2.internal docker[42306]: The following build time options have values that differ from what is persisted - the new values will NOT >
+Jul 28 23:41:51 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Main process exited, code=exited, status=2/INVALIDARGUMENT
+Jul 28 23:41:51 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Failed with result 'exit-code'.
+Jul 28 23:42:06 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Scheduled restart job, restart counter is at 49.
+Jul 28 23:42:06 ip-10-42-1-162.ec2.internal systemd[1]: Stopped keycloak.service - Keycloak Docker Service.
+Jul 28 23:42:06 ip-10-42-1-162.ec2.internal systemd[1]: Starting keycloak.service - Keycloak Docker Service...
+Jul 28 23:42:06 ip-10-42-1-162.ec2.internal docker[42582]: keycloak
+Jul 28 23:42:06 ip-10-42-1-162.ec2.internal systemd[1]: Started keycloak.service - Keycloak Docker Service.
+Jul 28 23:42:06 ip-10-42-1-162.ec2.internal docker[42588]: Appending additional Java properties to JAVA_OPTS
+Jul 28 23:42:07 ip-10-42-1-162.ec2.internal docker[42588]: The following build time options have values that differ from what is persisted - the new values will NOT >
+Jul 28 23:42:08 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Main process exited, code=exited, status=2/INVALIDARGUMENT
+Jul 28 23:42:08 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Failed with result 'exit-code'.
+Jul 28 23:42:23 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Scheduled restart job, restart counter is at 50.
+Jul 28 23:42:23 ip-10-42-1-162.ec2.internal systemd[1]: Stopped keycloak.service - Keycloak Docker Service.
+Jul 28 23:42:23 ip-10-42-1-162.ec2.internal systemd[1]: Starting keycloak.service - Keycloak Docker Service...
+Jul 28 23:42:23 ip-10-42-1-162.ec2.internal docker[42922]: keycloak
+Jul 28 23:42:23 ip-10-42-1-162.ec2.internal systemd[1]: Started keycloak.service - Keycloak Docker Service.
+Jul 28 23:42:24 ip-10-42-1-162.ec2.internal docker[42927]: Appending additional Java properties to JAVA_OPTS
+Jul 28 23:42:25 ip-10-42-1-162.ec2.internal docker[42927]: The following build time options have values that differ from what is persisted - the new values will NOT >
+Jul 28 23:42:25 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Main process exited, code=exited, status=2/INVALIDARGUMENT
+Jul 28 23:42:25 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Failed with result 'exit-code'.
+Jul 28 23:42:40 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Scheduled restart job, restart counter is at 51.
+Jul 28 23:42:40 ip-10-42-1-162.ec2.internal systemd[1]: Stopped keycloak.service - Keycloak Docker Service.
+Jul 28 23:42:40 ip-10-42-1-162.ec2.internal systemd[1]: Starting keycloak.service - Keycloak Docker Service...
+Jul 28 23:42:40 ip-10-42-1-162.ec2.internal docker[43206]: keycloak
+Jul 28 23:42:40 ip-10-42-1-162.ec2.internal systemd[1]: Started keycloak.service - Keycloak Docker Service.
+Jul 28 23:42:41 ip-10-42-1-162.ec2.internal docker[43212]: Appending additional Java properties to JAVA_OPTS
+Jul 28 23:42:42 ip-10-42-1-162.ec2.internal docker[43212]: The following build time options have values that differ from what is persisted - the new values will NOT >
+Jul 28 23:42:42 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Main process exited, code=exited, status=2/INVALIDARGUMENT
+Jul 28 23:42:42 ip-10-42-1-162.ec2.internal systemd[1]: keycloak.service: Failed with result 'exit-code'.
+lines 424-466/466 (END)
