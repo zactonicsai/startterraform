@@ -201,10 +201,11 @@ chown -R 1000:1000 /opt/keycloak/conf
 chmod 600 /opt/keycloak/conf/keycloak.conf
 
 echo "=== [7/8] Building Optimized Keycloak Docker Image ==="
-# We pre-build the image here with the DB dialect so it boots incredibly fast.
+# We copy the config into the image so build-time properties (like health, metrics, and db) 
+# are correctly baked into the optimized image before it starts.
 cat > /opt/keycloak/Dockerfile <<EOF
 FROM quay.io/keycloak/keycloak:${var.keycloak_version}
-ENV KC_DB=postgres
+COPY --chown=1000:1000 conf/ /opt/keycloak/conf/
 RUN /opt/keycloak/bin/kc.sh build
 EOF
 

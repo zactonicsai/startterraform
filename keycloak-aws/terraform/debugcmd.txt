@@ -1,3 +1,6 @@
+
+terraform apply -target="aws_instance.keycloak"
+
 cat /var/log/keycloak-bootstrap.log
 + echo '=== [1/8] Updating OS packages and installing Docker ==='
 === [1/8] Updating OS packages and installing Docker ===
